@@ -99,3 +99,10 @@ test('mset/mget', async () => {
   await kv.mset({k0: 0, k1: 1, k2: 2})
   expect(await kv.mget('k0', 'k1', 'k2')).toEqual({k0: 0, k1: 1, k2: 2})
 })
+
+test('incr/decr', async () => {
+  const kv = new KV(db, {table: 'incr'})
+  expect(await kv.incr('k0')).toBe(1)
+  expect(await kv.incr('k0')).toBe(2)
+  expect(await kv.decr('k0')).toBe(1)
+})

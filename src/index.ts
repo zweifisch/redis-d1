@@ -55,16 +55,15 @@ export class KV {
   }
 
   async mget(...keys: string[]) {
-    if (!this.initialized) {
-      await this.init()
-    }
+    this.initialized || await this.init()
     const result = await this.db.prepare(`SELECT key, value FROM ${this.table} WHERE key IN (${keys.map(_ => '?').join(',')})`)
       .bind(...keys)
       .all()
     return Object.fromEntries(result.results.map(x => [x.key, x.value ? JSON.parse(x.value as string) : undefined]))
   }
 
-  keys(pattern: string) {
+  async keys(pattern: string) {
+    this.initialized || await this.init()
     const escape = pattern.includes('_') || pattern.includes('%')
     if (escape) {
       pattern = pattern.replaceAll('_', '\\_').replaceAll('%', '\\%')
@@ -76,11 +75,25 @@ export class KV {
       .then(rows => rows.results.map(x => x.key))
   }
 
+  async incr(key: string) {
+    this.initialized || await this.init()
+    const result = await this.db.prepare(`INSERT INTO '${this.table}' (key, value) VALUES (?, 1) ON CONFLICT(key) DO UPDATE SET value = value + 1 RETURNING value`)
+      .bind(key)
+      .first()
+    return parseInt(result!.value as string)
+  }
+
+  async decr(key: string) {
+    this.initialized || await this.init()
+    const result = await this.db.prepare(`INSERT INTO '${this.table}' (key, value) VALUES (?, -1) ON CONFLICT(key) DO UPDATE SET value = value - 1 RETURNING value`)
+      .bind(key)
+      .first()
+    return parseInt(result!.value as string)
+  }
+
   async del(...keys: string[]) {
-    if (!this.initialized) {
-      await this.init()
-    }
-    return this.db.prepare(`DELETE FROM ${this.table} WHERE key IN (${keys.map(_ => '?').join(',')})`)
+    this.initialized || await this.init()
+    return this.db.prepare(`DELETE FROM '${this.table}' WHERE key IN (${keys.map(_ => '?').join(',')})`)
       .bind(...keys).run()
   }
 }
