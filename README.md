@@ -27,6 +27,10 @@ await kv.del('k0', 'k1')
 - mget
 - incr
 - decr
+- lpush
+- lrange
+- lpop
+- rpop
 
 ## Multiple Stores
 

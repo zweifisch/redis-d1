@@ -1,4 +1,4 @@
-import { D1Database } from "@cloudflare/workers-types"
+import { D1Database, D1PreparedStatement } from "@cloudflare/workers-types"
 import { Database } from "bun:sqlite"
 import { KV } from './'
 import { test, expect } from "bun:test"
@@ -11,16 +11,17 @@ class MockD1Database {
     return {
       bind: (...params: Array<any>) => {
         // console.log(sql)
+        const stmt = this.db.prepare(sql, params)
         return {
-          all: async () => {
-            return { results: this.db.query(sql).all(...params) }
-          },
           first: async () => {
-            return this.db.query(sql).get(...params)
+            return stmt.get()
           },
-          run: () => {
-            const {changes, lastInsertRowid} = this.db.query(sql).run(...params)
-            return { meta: {changes, last_row_id: lastInsertRowid}}
+          run: async () => {
+            if (sql.trimStart().startsWith('SELECT') || sql.trimStart().startsWith('select')) {
+              return { results: stmt.all() }
+            }
+            const {changes, lastInsertRowid} = stmt.run()
+            return { meta: {changes, last_row_id: lastInsertRowid} }
           }
         }
       }
@@ -31,14 +32,14 @@ class MockD1Database {
     return this.db.exec(sql)
   }
 
-  async batch(statements: Array<any>) {
+  async batch(statements: Array<D1PreparedStatement>) {
     const result: any[] = []
     this.db.transaction(() => {
       for (const stmt of statements) {
         result.push(stmt.run())
       }
     })()
-    return result
+    return Promise.all(result)
   }
 }
 
@@ -55,11 +56,20 @@ test('set/get', async () => {
   await kv.set('k1', undefined)
   expect(await kv.get('k1')).toBe(null)
 
+  await kv.set('k2', '1')
+  expect(await kv.get('k2')).toBe('1')
+
   await kv.set('k2', 'val')
   expect(await kv.get('k2')).toBe('val')
 
   await kv.set('k2', 0)
   expect(await kv.get('k2')).toBe(0)
+
+  await kv.set('bool', true)
+  expect(await kv.get('bool')).toEqual(true)
+
+  await kv.set('bool', false)
+  expect(await kv.get('bool')).toEqual(false)
 
   await kv.set('list', [])
   expect(await kv.get('list')).toEqual([])
@@ -96,8 +106,8 @@ test('mset/mget', async () => {
   await kv.set('k1', 1)
   expect(await kv.mget('k0', 'k1')).toEqual({k0: null, k1: 1})
 
-  await kv.mset({k0: 0, k1: 1, k2: 2})
-  expect(await kv.mget('k0', 'k1', 'k2')).toEqual({k0: 0, k1: 1, k2: 2})
+  await kv.mset({k0: 0, k1: 2, k2: 3})
+  expect(await kv.mget('k0', 'k1', 'k2')).toEqual({k0: 0, k1: 2, k2: 3})
 })
 
 test('incr/decr', async () => {
@@ -105,4 +115,23 @@ test('incr/decr', async () => {
   expect(await kv.incr('k0')).toBe(1)
   expect(await kv.incr('k0')).toBe(2)
   expect(await kv.decr('k0')).toBe(1)
+})
+
+test('lists', async () => {
+  const kv = new KV(db, {table: 'lists'})
+  await kv.lpush('l1', 1)
+  await kv.lpush('l1', 2)
+  expect(await kv.lrange('l1', 0, 1)).toEqual([1, 2])
+  expect(await kv.lpop('l1')).toEqual(1)
+  expect(await kv.lrange('l1', 0, -1)).toEqual([2])
+
+  expect(await kv.lpop('l2')).toEqual(undefined)
+  await kv.lpush('l2', 2)
+  await kv.lpush('l2', 3)
+  expect(await kv.lrange('l2', 0, -1)).toEqual([2, 3])
+  expect(await kv.rpop('l2')).toEqual(3)
+  expect(await kv.lrange('l2', 0, -1)).toEqual([2])
+  expect(await kv.rpop('l2')).toEqual(2)
+  expect(await kv.lrange('l2', 0, -1)).toEqual([])
+  expect(await kv.rpop('l2')).toEqual(null)
 })
