@@ -1,0 +1,20 @@
+{
+  "name": "d1-kv",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "prepublishOnly": "tsc -p .",
+    "test": "bun test"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/bun": "^1.1.14",
+    "typescript": "^5.7.2"
+  },
+  "dependencies": {
+    "@cloudflare/workers-types": "^4.20241112.0"
+  },
+  "files": ["lib/", "src/*.ts", "!src/*.test.ts"],
+  "description": "d1 as kv"
+}
