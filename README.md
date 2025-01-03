@@ -12,7 +12,22 @@ await kv.get('k0') // 0
 await kv.set('k1', '1')
 await kv.get('k1') // '1'
 
-await kv.keys('k?') // ['k0', 'k1']
+await kv.keys('k*') // ['k0', 'k1']
 
-await kv.del('k1')
+await kv.del('k0', 'k1')
+```
+
+## Supported Commands
+
+- set
+- get
+- keys
+- del
+- mset
+- mget
+
+## Multiple Stores
+
+```js
+const kv2 = new KV(ctx.env.db, {table: 'kv_store2'})
 ```

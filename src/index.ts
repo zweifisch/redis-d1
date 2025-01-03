@@ -44,6 +44,26 @@ export class KV {
     }
   }
 
+  async mset(obj: Record<string, any>) {
+    if (!this.initialized) {
+      await this.init()
+    }
+    const entries = Object.entries(obj)
+    return this.db.prepare(`INSERT OR REPLACE INTO ${this.table} (key, value) VALUES ${entries.map(_ => '(?,?)').join(',')}`)
+      .bind(...entries.map(([k, v]) => [k, v === undefined ? 'null' : JSON.stringify(v)]).flat())
+      .run()
+  }
+
+  async mget(...keys: string[]) {
+    if (!this.initialized) {
+      await this.init()
+    }
+    const result = await this.db.prepare(`SELECT key, value FROM ${this.table} WHERE key IN (${keys.map(_ => '?').join(',')})`)
+      .bind(...keys)
+      .all()
+    return Object.fromEntries(result.results.map(x => [x.key, x.value ? JSON.parse(x.value as string) : undefined]))
+  }
+
   keys(pattern: string) {
     const escape = pattern.includes('_') || pattern.includes('%')
     if (escape) {

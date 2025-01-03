@@ -47,6 +47,8 @@ const db = new MockD1Database() as unknown as D1Database
 test('set/get', async () => {
   const kv = new KV(db)
 
+  expect(await kv.get('k0')).toBe(undefined)
+
   await kv.set('k0', null)
   expect(await kv.get('k0')).toBe(null)
 
@@ -83,4 +85,17 @@ test('keys', async () => {
 
   await kv.del('k00', 'k_12')
   expect(await kv.keys('*')).toEqual(['k_1'])
+})
+
+test('mset/mget', async () => {
+  const kv = new KV(db, {table: 'mget'})
+
+  expect(await kv.mget('k0')).toEqual({})
+
+  await kv.set('k0', null)
+  await kv.set('k1', 1)
+  expect(await kv.mget('k0', 'k1')).toEqual({k0: null, k1: 1})
+
+  await kv.mset({k0: 0, k1: 1, k2: 2})
+  expect(await kv.mget('k0', 'k1', 'k2')).toEqual({k0: 0, k1: 1, k2: 2})
 })
