@@ -125,7 +125,7 @@ export class KV {
 
   async lpush<T>(key: string, value: T) {
     this.initialized || await this.init()
-    const val = this.encode(value)
+    const val = JSON.stringify(value)
     await this.db.prepare(`\
     INSERT INTO ${this.table} (key, value) VALUES (?, json_array(json(?)))
     ON CONFLICT(key) DO UPDATE SET value = json_insert(value, '$[#]', json(?))`)
@@ -150,11 +150,20 @@ export class KV {
 
   async rpush<T>(key: string, value: T) {
     this.initialized || await this.init()
-    const val = JSON.stringify([value])
+    const val = JSON.stringify(value)
     await this.db.prepare(`\
-    INSERT INTO ${this.table} (key, value) VALUES (?, json(?))
-    ON CONFLICT(key) DO UPDATE SET value = json(? || substr(value, 2))`)
-      .bind(key, val, val.slice(0, -1) + ',')
+    INSERT INTO ${this.table} (key, value) VALUES (?, json_array(json(?)))
+      ON CONFLICT(key) DO UPDATE SET value = (
+        SELECT json_group_array(json(v)) FROM (
+          SELECT ? v, -1 key
+          UNION
+          SELECT json_quote(el.value) v, el.key key
+            FROM ${this.table} tbl, json_each(tbl.value) el
+            WHERE tbl.key = ?
+          ORDER BY key
+        )
+      )`)
+      .bind(key, val, val, key)
       .run()
   }
 
@@ -176,14 +185,19 @@ export class KV {
   async lrange(key: string, start: number, end: number) {
     this.initialized || await this.init()
     const result = await this.db.prepare(`\
-      SELECT value FROM ${this.table}
-        WHERE key = ?
-        AND (expire_at IS NULL OR expire_at > UNIXEPOCH())`)
-      .bind(key)
+      SELECT json_group_array(json(value)) value FROM (
+        SELECT json_quote(el.value) value, el.key key
+        FROM ${this.table} tbl, json_each(tbl.value) el
+          WHERE tbl.key = ?
+          AND (expire_at IS NULL OR expire_at > UNIXEPOCH())
+        ORDER BY el.key
+      )
+      WHERE key >= ?${end === -1 ? '' : ` AND key <= ${end}`}`
+      )
+      .bind(key, start)
       .first()
     if (result?.value) {
-      const arr = JSON.parse(result.value as string)
-      return end = -1 ? arr.slice(start) : arr.slice(start, end + 1)
+      return JSON.parse(result.value as string)
     }
     return []
   }
