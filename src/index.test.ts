@@ -65,6 +65,12 @@ test('set/get', async () => {
   await kv.set('k2', 0)
   expect(await kv.get('k2')).toBe(0)
 
+  expect(await kv.set('k2', 1, {nx: true})).toBeFalse()
+  expect(await kv.get('k2')).toBe(0)
+
+  expect(await kv.set('nx', 1, {nx: true})).toBeTrue()
+  expect(await kv.get('nx')).toBe(1)
+
   await kv.set('bool', true)
   expect(await kv.get('bool')).toEqual(true)
 
@@ -153,7 +159,14 @@ test('ttl', async () => {
 
   await kv.expire('k', 0)
   expect(await kv.ttl('k')).toEqual(-2)
-  expect(await kv.get('k')).toEqual(undefined)
+  expect(await kv.get('k')).toBeUndefined()
+
+  await kv.set('k2', 1, {ex: 1})
+  expect(await kv.get('k2')).toEqual(1)
+  expect(await kv.ttl('k2')).toEqual(1)
+
+  await kv.set('k2', 1, {ex: 0})
+  expect(await kv.get('k2')).toBeUndefined()
 })
 
 test('hset/hget', async () => {

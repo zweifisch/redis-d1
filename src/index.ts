@@ -29,13 +29,16 @@ export class KV {
     return this.initialization
   }
 
-  async set<T>(key: string, value: T) {
+  async set<T>(key: string, value: T, opts?: Partial<{ex: number, nx: boolean}>) {
     if (!this.initialized) {
       await this.init()
     }
-    return this.db.prepare(`INSERT OR REPLACE INTO ${this.table} (key, value) VALUES (?, ?)`)
-      .bind(key, this.encode(value))
+    const expire_at = typeof opts?.ex === 'number' ? opts.ex + Math.floor(Date.now() / 1000) : null
+    const result = await this.db.prepare(`INSERT OR ${opts?.nx ? 'IGNORE' : 'REPLACE'}
+      INTO ${this.table} (key, value, expire_at) VALUES (?, ?, ?)`)
+      .bind(key, this.encode(value), expire_at)
       .run()
+    return result?.meta.changes > 0
   }
 
   private encode(value: any) {
