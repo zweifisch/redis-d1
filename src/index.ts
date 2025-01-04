@@ -17,7 +17,13 @@ export class KV {
   init() {
     if (!this.initialization) {
       this.initialization = this.db
-        .exec(`CREATE TABLE IF NOT EXISTS ${this.table} (key TEXT PRIMARY KEY, value JSON)`)
+        .exec(`\
+          CREATE TABLE IF NOT EXISTS ${this.table} (
+            key TEXT PRIMARY KEY,
+            value JSON,
+            expire_at INTEGER
+          ) WITHOUT ROWID;
+          CREATE INDEX IF NOT EXISTS idx_expire_at ON ${this.table} (expire_at);`)
       this.initialization.then(() => this.initialized = true)
     }
     return this.initialization
@@ -32,13 +38,13 @@ export class KV {
       .run()
   }
 
-  encode(value: any) {
+  private encode(value: any) {
     return value === undefined ? 'null' :
       typeof value === 'number' ? value :
       JSON.stringify(value)
   }
 
-  decode(value: any) {
+  private decode(value: any) {
     return typeof value === 'string' ? JSON.parse(value) : value
   }
 
@@ -46,7 +52,10 @@ export class KV {
     if (!this.initialized) {
       await this.init()
     }
-    const val = await this.db.prepare(`SELECT value FROM ${this.table} WHERE key = ?`)
+    const val = await this.db.prepare(`\
+      SELECT value FROM ${this.table}
+        WHERE key = ?
+        AND (expire_at IS NULL OR expire_at > UNIXEPOCH())`)
       .bind(key)
       .first()
     if (val) {
@@ -66,7 +75,10 @@ export class KV {
 
   async mget(...keys: string[]) {
     this.initialized || await this.init()
-    const result = await this.db.prepare(`SELECT key, value FROM ${this.table} WHERE key IN (${keys.map(_ => '?').join(',')})`)
+    const result = await this.db.prepare(`\
+      SELECT key, value FROM ${this.table}
+        WHERE key IN (${keys.map(_ => '?').join(',')})
+        AND (expire_at IS NULL OR expire_at > UNIXEPOCH())`)
       .bind(...keys)
       .run()
     return Object.fromEntries(result.results.map(x => [x.key, this.decode(x.value)]))
@@ -79,7 +91,10 @@ export class KV {
       pattern = pattern.replaceAll('_', '\\_').replaceAll('%', '\\%')
     }
     pattern = pattern.replaceAll('?', '_').replaceAll('*', '%')
-    return this.db.prepare(`SELECT key FROM ${this.table} where key like '${pattern}'${escape ? " ESCAPE '\\'" : ''}`)
+    return this.db.prepare(`\
+      SELECT key FROM ${this.table}
+        WHERE key LIKE '${pattern}'${escape ? " ESCAPE '\\'" : ''}
+        AND (expire_at IS NULL OR expire_at > UNIXEPOCH())`)
       .bind()
       .run()
       .then(rows => rows.results.map(x => x.key))
@@ -117,20 +132,38 @@ export class KV {
     this.initialized || await this.init()
     const [result] = await this.db.batch([
       this.db.prepare(`\
-        SELECT json_extract(value, "$[0]") value FROM ${this.table} WHERE key = ?`).bind(key),
+        SELECT value ->> '$[0]' value FROM ${this.table}
+          WHERE key = ?
+          AND (expire_at IS NULL OR expire_at > UNIXEPOCH())`).bind(key),
       this.db.prepare(`\
-        UPDATE ${this.table} SET value = json_remove(value, "$[0]") WHERE key = ?`).bind(key)
+        UPDATE ${this.table} SET value = json_remove(value, "$[0]")
+        WHERE key = ?
+        AND (expire_at IS NULL OR expire_at > UNIXEPOCH())`).bind(key)
       ])
     return (result?.results?.[0] as any)?.value
+  }
+
+  async rpush<T>(key: string, value: T) {
+    this.initialized || await this.init()
+    const val = JSON.stringify([value])
+    const result = await this.db.prepare(`\
+    INSERT INTO ${this.table} (key, value) VALUES (?, json(?))
+    ON CONFLICT(key) DO UPDATE SET value = json(? || substr(value, 2))`)
+      .bind(key, val, val.slice(0, -1) + ',')
+      .run()
   }
 
   async rpop(key: string) {
     this.initialized || await this.init()
     const [result] = await this.db.batch([
       this.db.prepare(`\
-        SELECT json_extract(value, "$[#-1]") value FROM ${this.table} WHERE key = ?`).bind(key),
+        SELECT value ->> '$[#-1]' value FROM ${this.table}
+          WHERE key = ?
+          AND (expire_at IS NULL OR expire_at > UNIXEPOCH())`).bind(key),
       this.db.prepare(`\
-        UPDATE ${this.table} SET value = json_remove(value, "$[#-1]") WHERE key = ?`).bind(key)
+        UPDATE ${this.table} SET value = json_remove(value, "$[#-1]")
+          WHERE key = ?
+          AND (expire_at IS NULL OR expire_at > UNIXEPOCH())`).bind(key),
       ])
     return (result?.results?.[0] as any)?.value
   }
@@ -138,7 +171,9 @@ export class KV {
   async lrange(key: string, start: number, end: number) {
     this.initialized || await this.init()
     const result = await this.db.prepare(`\
-      SELECT value FROM ${this.table} WHERE key = ?`)
+      SELECT value FROM ${this.table}
+        WHERE key = ?
+        AND (expire_at IS NULL OR expire_at > UNIXEPOCH())`)
       .bind(key)
       .first()
     if (result?.value) {
@@ -146,6 +181,28 @@ export class KV {
       return end = -1 ? arr.slice(start) : arr.slice(start, end + 1)
     }
     return []
+  }
+
+  async expire(key: string, seconds: number) {
+    return this.db.prepare(`UPDATE ${this.table} SET expire_at = UNIXEPOCH() + ? WHERE key = ?`)
+      .bind(seconds, key)
+      .run()
+  }
+
+  async ttl(key: string) {
+    this.initialized || await this.init()
+    const result: {expire_at: number | null} | undefined | null = await this.db.prepare(`\
+      SELECT expire_at FROM ${this.table} WHERE key = ?`)
+      .bind(key)
+      .first()
+    const now = Math.floor(Date.now() / 1000)
+    if (!result || result.expire_at && result.expire_at <= now) {
+      return -2
+    }
+    if (!result.expire_at) {
+      return -1
+    }
+    return result.expire_at - now
   }
 
   async del(...keys: string[]) {

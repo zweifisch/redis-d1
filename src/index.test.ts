@@ -135,3 +135,23 @@ test('lists', async () => {
   expect(await kv.lrange('l2', 0, -1)).toEqual([])
   expect(await kv.rpop('l2')).toEqual(null)
 })
+
+test('rpush', async () => {
+  const kv = new KV(db, {table: 'rpush'})
+  await kv.rpush('l1', 2)
+  expect(await kv.lrange('l1', 0, 1)).toEqual([2])
+  await kv.rpush('l1', 1)
+  expect(await kv.lrange('l1', 0, 1)).toEqual([1, 2])
+})
+
+test('ttl', async () => {
+  const kv = new KV(db, {table: 'ttl'})
+  await kv.set('k', 1)
+  expect(await kv.ttl('k')).toEqual(-1)
+  await kv.expire('k', 1)
+  expect(await kv.ttl('k')).toEqual(1)
+
+  await kv.expire('k', 0)
+  expect(await kv.ttl('k')).toEqual(-2)
+  expect(await kv.get('k')).toEqual(undefined)
+})
