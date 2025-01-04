@@ -30,7 +30,9 @@ await kv.del('k0', 'k1')
 - lpush
 - lrange
 - lpop
+- rpush
 - rpop
+- lrem
 - expire
 - ttl
 

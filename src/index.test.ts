@@ -125,11 +125,16 @@ test('incr/decr', async () => {
 
 test('lists', async () => {
   const kv = new KV(db, {table: 'lists'})
+
+  expect(await kv.llen('l1')).toBe(0)
   await kv.lpush('l1', 1)
   await kv.lpush('l1', 2)
   expect(await kv.lrange('l1', 0, 1)).toEqual([1, 2])
   expect(await kv.lpop('l1')).toEqual(1)
   expect(await kv.lrange('l1', 0, -1)).toEqual([2])
+  expect(await kv.llen('l1')).toBe(1)
+  await kv.lpush('l1', {ok: true})
+  expect(await kv.lrange('l1', 0, -1)).toEqual([2, {ok: true}])
 
   expect(await kv.lpop('l2')).toEqual(undefined)
   await kv.lpush('l2', 2)
@@ -140,6 +145,16 @@ test('lists', async () => {
   expect(await kv.rpop('l2')).toEqual(2)
   expect(await kv.lrange('l2', 0, -1)).toEqual([])
   expect(await kv.rpop('l2')).toEqual(null)
+
+  for (const c of 'abcbbabc') {
+    await kv.lpush('l3', c)
+  }
+  await kv.lrem('l3', 2, 'b')
+  expect(await kv.lrange('l3', 0, -1)).toEqual([... 'acbabc'])
+  await kv.lrem('l3', -1, 'a')
+  expect(await kv.lrange('l3', 0, -1)).toEqual([... 'acbbc'])
+  await kv.lrem('l3', 0, 'c')
+  expect(await kv.lrange('l3', 0, -1)).toEqual([... 'abb'])
 })
 
 test('rpush', async () => {
@@ -148,6 +163,14 @@ test('rpush', async () => {
   expect(await kv.lrange('l1', 0, 1)).toEqual([2])
   await kv.rpush('l1', 1)
   expect(await kv.lrange('l1', 0, 1)).toEqual([1, 2])
+  await kv.rpush('l1', {ok: false})
+  expect(await kv.lrange('l1', 0, -1)).toEqual([{ok: false}, 1, 2])
+
+  for (const c of [...'abcbbabc'].reverse()) {
+    await kv.rpush('l2', c)
+  }
+  await kv.lrem('l2', -2, 'b')
+  expect(await kv.lrange('l2', 0, -1)).toEqual([... 'abcbac'])
 })
 
 test('ttl', async () => {

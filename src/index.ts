@@ -1,3 +1,5 @@
+type Primitive = string | number | boolean | null
+
 export class KV {
 
   private initialized = false
@@ -124,9 +126,9 @@ export class KV {
   async lpush<T>(key: string, value: T) {
     this.initialized || await this.init()
     const val = this.encode(value)
-    const result = await this.db.prepare(`\
-    INSERT INTO ${this.table} (key, value) VALUES (?, json_array(?))
-    ON CONFLICT(key) DO UPDATE SET value = json_insert(value, '$[#]', ?)`)
+    await this.db.prepare(`\
+    INSERT INTO ${this.table} (key, value) VALUES (?, json_array(json(?)))
+    ON CONFLICT(key) DO UPDATE SET value = json_insert(value, '$[#]', json(?))`)
       .bind(key, val, val)
       .run()
   }
@@ -149,7 +151,7 @@ export class KV {
   async rpush<T>(key: string, value: T) {
     this.initialized || await this.init()
     const val = JSON.stringify([value])
-    const result = await this.db.prepare(`\
+    await this.db.prepare(`\
     INSERT INTO ${this.table} (key, value) VALUES (?, json(?))
     ON CONFLICT(key) DO UPDATE SET value = json(? || substr(value, 2))`)
       .bind(key, val, val.slice(0, -1) + ',')
@@ -180,10 +182,57 @@ export class KV {
       .bind(key)
       .first()
     if (result?.value) {
-      const arr = JSON.parse(result!.value as string)
+      const arr = JSON.parse(result.value as string)
       return end = -1 ? arr.slice(start) : arr.slice(start, end + 1)
     }
     return []
+  }
+
+  async llen(key: string) {
+    this.initialized || await this.init()
+    const result = await this.db.prepare(`\
+      SELECT json_array_length(value) value FROM ${this.table}
+        WHERE key = ?
+        AND (expire_at IS NULL OR expire_at > UNIXEPOCH())`)
+      .bind(key)
+      .first()
+    if (typeof result?.value === 'number') {
+      return result.value
+    }
+    return 0
+  }
+
+  async lrem(key: string, count: number, element: Primitive) {
+    this.initialized || await this.init()
+
+    if (count === 0) {
+      return this.db.prepare(`\
+        UPDATE ${this.table} SET value = (
+          SELECT json_group_array(el.value) FROM ${this.table} tbl, json_each(tbl.value) el
+            WHERE tbl.key = ?
+            AND el.value <> ?
+            AND (expire_at IS NULL OR expire_at > UNIXEPOCH())
+        ) WHERE key = ?`
+      ).bind(key, element, key).run()
+    }
+
+    return this.db.prepare(`\
+      UPDATE ${this.table} SET value = (
+        SELECT json_group_array(value)
+        FROM (
+            SELECT
+              el.value value,
+              el.key key,
+              ROW_NUMBER() OVER (PARTITION BY el.value order by el.key ${count > 0 ? 'ASC' : 'DESC'}) rn
+            FROM ${this.table} tbl, json_each(tbl.value) el
+              WHERE tbl.key = ?
+              AND (expire_at IS NULL OR expire_at > UNIXEPOCH())
+            ORDER BY el.key
+        )
+        WHERE value <> ? OR rn > ?
+      )
+      WHERE key = ?`
+    ).bind(key, element, Math.abs(count), key).run()
   }
 
   async expire(key: string, seconds: number) {
@@ -213,8 +262,8 @@ export class KV {
     this.initialized || await this.init()
     const val = this.encode(value)
     return this.db.prepare(`\
-      INSERT INTO ${this.table} (key, value) VALUES (?, json_object(?, ?))
-        ON CONFLICT(key) DO UPDATE SET value = json_set(value, '$.${field}', ?)`)
+      INSERT INTO ${this.table} (key, value) VALUES (?, json_object(?, json(?)))
+        ON CONFLICT(key) DO UPDATE SET value = json_set(value, '$.${field}', json(?))`)
       .bind(key, field, val, val)
       .run()
   }
@@ -222,7 +271,7 @@ export class KV {
   async hget(key: string, field: string) {
     this.initialized || await this.init()
     const result = await this.db.prepare(`\
-      SELECT value ->> '$.${field}' value FROM ${this.table}
+      SELECT value -> '$.${field}' value FROM ${this.table}
         WHERE key = ?
         AND (expire_at IS NULL OR expire_at > UNIXEPOCH())`)
       .bind(key)
@@ -238,9 +287,7 @@ export class KV {
         AND (expire_at IS NULL OR expire_at > UNIXEPOCH())`)
       .bind(key)
       .first()
-    if (result?.value) {
-      return Object.fromEntries(Object.entries(this.decode(result.value)).map(([k, v]) => [k, this.decode(v)]))
-    }
+    return this.decode(result?.value)
   }
 
   async del(...keys: string[]) {
