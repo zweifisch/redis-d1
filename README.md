@@ -31,6 +31,8 @@ await kv.del('k0', 'k1')
 - lrange
 - lpop
 - rpop
+- expire
+- ttl
 
 ## Multiple Stores
 

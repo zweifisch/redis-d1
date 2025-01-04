@@ -29,7 +29,7 @@ export class KV {
     return this.initialization
   }
 
-  async set(key: string, value: any) {
+  async set<T>(key: string, value: T) {
     if (!this.initialized) {
       await this.init()
     }
@@ -184,6 +184,7 @@ export class KV {
   }
 
   async expire(key: string, seconds: number) {
+    this.initialized || await this.init()
     return this.db.prepare(`UPDATE ${this.table} SET expire_at = UNIXEPOCH() + ? WHERE key = ?`)
       .bind(seconds, key)
       .run()
@@ -203,6 +204,40 @@ export class KV {
       return -1
     }
     return result.expire_at - now
+  }
+
+  async hset<T>(key: string, field: string, value: T) {
+    this.initialized || await this.init()
+    const val = this.encode(value)
+    return this.db.prepare(`\
+      INSERT INTO ${this.table} (key, value) VALUES (?, json_object(?, ?))
+        ON CONFLICT(key) DO UPDATE SET value = json_set(value, '$.${field}', ?)`)
+      .bind(key, field, val, val)
+      .run()
+  }
+
+  async hget(key: string, field: string) {
+    this.initialized || await this.init()
+    const result = await this.db.prepare(`\
+      SELECT value ->> '$.${field}' value FROM ${this.table}
+        WHERE key = ?
+        AND (expire_at IS NULL OR expire_at > UNIXEPOCH())`)
+      .bind(key)
+      .first()
+    return this.decode(result?.value)
+  }
+
+  async hgetall(key: string) {
+    this.initialized || await this.init()
+    const result = await this.db.prepare(`\
+      SELECT value ->> '$' value FROM ${this.table}
+        WHERE key = ?
+        AND (expire_at IS NULL OR expire_at > UNIXEPOCH())`)
+      .bind(key)
+      .first()
+    if (result?.value) {
+      return Object.fromEntries(Object.entries(this.decode(result.value)).map(([k, v]) => [k, this.decode(v)]))
+    }
   }
 
   async del(...keys: string[]) {

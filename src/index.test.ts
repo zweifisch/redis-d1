@@ -155,3 +155,20 @@ test('ttl', async () => {
   expect(await kv.ttl('k')).toEqual(-2)
   expect(await kv.get('k')).toEqual(undefined)
 })
+
+test('hset/hget', async () => {
+  const kv = new KV(db, {table: 'hash'})
+  expect(await kv.hget('h', 'f')).toBeUndefined()
+  await kv.hset('h', 'f', 1)
+  expect(await kv.hget('h', 'f')).toBe(1)
+  expect(await kv.hget('h', 'f2')).toBeNull()
+  await kv.hset('h', 'f', '2')
+  expect(await kv.hget('h', 'f')).toBe('2')
+  await kv.hset('h', 'f', '{"ok": true}')
+  expect(await kv.hget('h', 'f')).toBe('{"ok": true}')
+  expect(await kv.hgetall('h')).toEqual({f: '{"ok": true}'})
+
+  await kv.hset('h', 'f', {ok: true})
+  expect(await kv.hget('h', 'f')).toEqual({ok: true})
+  expect(await kv.hgetall('h')).toEqual({f: {ok: true}})
+})
