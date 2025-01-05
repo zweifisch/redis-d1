@@ -24,7 +24,7 @@ export class KV {
             key TEXT PRIMARY KEY,
             value JSON,
             expire_at INTEGER
-          ) WITHOUT ROWID;
+          );
           CREATE INDEX IF NOT EXISTS idx_expire_at ON ${this.table} (expire_at);`)
       this.initialization.then(() => this.initialized = true)
     }
@@ -50,13 +50,11 @@ export class KV {
   }
 
   private decode(value: any) {
-    return typeof value === 'string' ? JSON.parse(value) : value
+    return value && typeof value === 'string' ? JSON.parse(value) : value
   }
 
   async get(key: string) {
-    if (!this.initialized) {
-      await this.init()
-    }
+    this.initialized || await this.init()
     const val = await this.db.prepare(`\
       SELECT value FROM ${this.table}
         WHERE key = ?
@@ -69,9 +67,7 @@ export class KV {
   }
 
   async mset(obj: Record<string, any>) {
-    if (!this.initialized) {
-      await this.init()
-    }
+    this.initialized || await this.init()
     const entries = Object.entries(obj)
     return this.db.prepare(`INSERT OR REPLACE INTO ${this.table} (key, value) VALUES ${entries.map(_ => '(?,?)').join(',')}`)
       .bind(...entries.map(([k, v]) => [k, this.encode(v)]).flat())
@@ -137,15 +133,15 @@ export class KV {
     this.initialized || await this.init()
     const [result] = await this.db.batch([
       this.db.prepare(`\
-        SELECT value ->> '$[0]' value FROM ${this.table}
+        SELECT value -> '$[0]' value FROM ${this.table}
           WHERE key = ?
           AND (expire_at IS NULL OR expire_at > UNIXEPOCH())`).bind(key),
       this.db.prepare(`\
-        UPDATE ${this.table} SET value = json_remove(value, "$[0]")
+        UPDATE ${this.table} SET value = json_remove(value, '$[0]')
         WHERE key = ?
         AND (expire_at IS NULL OR expire_at > UNIXEPOCH())`).bind(key)
       ])
-    return (result?.results?.[0] as any)?.value
+    return this.decode((result?.results?.[0] as any)?.value)
   }
 
   async rpush<T>(key: string, value: T) {
@@ -171,7 +167,7 @@ export class KV {
     this.initialized || await this.init()
     const [result] = await this.db.batch([
       this.db.prepare(`\
-        SELECT value ->> '$[#-1]' value FROM ${this.table}
+        SELECT value -> '$[#-1]' value FROM ${this.table}
           WHERE key = ?
           AND (expire_at IS NULL OR expire_at > UNIXEPOCH())`).bind(key),
       this.db.prepare(`\
@@ -179,7 +175,7 @@ export class KV {
           WHERE key = ?
           AND (expire_at IS NULL OR expire_at > UNIXEPOCH())`).bind(key),
       ])
-    return (result?.results?.[0] as any)?.value
+    return this.decode((result?.results?.[0] as any)?.value)
   }
 
   async lrange(key: string, start: number, end: number) {
@@ -249,6 +245,15 @@ export class KV {
     ).bind(key, element, Math.abs(count), key).run()
   }
 
+  async lindex(key: string, index: number) {
+    this.initialized || await this.init()
+    index = Number(index)
+    const result = await this.db.prepare(`SELECT value -> '$[${index < 0 ? '#' + index : index}]' value
+        FROM ${this.table} WHERE key = ?`)
+      .bind(key).first()
+    return this.decode(result?.value)
+  }
+
   async expire(key: string, seconds: number) {
     this.initialized || await this.init()
     return this.db.prepare(`UPDATE ${this.table} SET expire_at = UNIXEPOCH() + ? WHERE key = ?`)
@@ -285,23 +290,16 @@ export class KV {
   async hget(key: string, field: string) {
     this.initialized || await this.init()
     const result = await this.db.prepare(`\
-      SELECT value -> '$.${field}' value FROM ${this.table}
+      SELECT value -> ? value FROM ${this.table}
         WHERE key = ?
         AND (expire_at IS NULL OR expire_at > UNIXEPOCH())`)
-      .bind(key)
+      .bind(field, key)
       .first()
     return this.decode(result?.value)
   }
 
   async hgetall(key: string) {
-    this.initialized || await this.init()
-    const result = await this.db.prepare(`\
-      SELECT value ->> '$' value FROM ${this.table}
-        WHERE key = ?
-        AND (expire_at IS NULL OR expire_at > UNIXEPOCH())`)
-      .bind(key)
-      .first()
-    return this.decode(result?.value)
+    return this.get(key)
   }
 
   async del(...keys: string[]) {

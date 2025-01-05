@@ -140,6 +140,10 @@ test('lists', async () => {
   expect(await kv.get('l1')).toEqual([2, 'true', {ok: true}])
   expect(await kv.lrange('l1', 0, -1)).toEqual([2, 'true', {ok: true}])
 
+  expect(await kv.lindex('l1', 0)).toEqual(2)
+  expect(await kv.lindex('l1', 1)).toEqual('true')
+  expect(await kv.lindex('l1', -1)).toEqual({ok: true})
+
   expect(await kv.lpop('l2')).toEqual(undefined)
   await kv.lpush('l2', 2)
   await kv.lpush('l2', 3)
@@ -180,6 +184,15 @@ test('rpush', async () => {
   }
   await kv.lrem('l2', -2, 'b')
   expect(await kv.lrange('l2', 0, -1)).toEqual([... 'abcbac'])
+})
+
+test('pop', async () => {
+  const kv = new KV(db, {table: 'pop'})
+  await kv.lpush('k', [])
+  expect(await kv.lpop('k')).toEqual([])
+
+  await kv.lpush('k', {})
+  expect(await kv.rpop('k')).toEqual({})
 })
 
 test('ttl', async () => {
