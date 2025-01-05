@@ -247,10 +247,24 @@ export class KV {
 
   async lindex(key: string, index: number) {
     this.initialized || await this.init()
-    const result = await this.db.prepare(`SELECT value -> '$[${index < 0 ? '#' + Number(index) : Number(index)}]' value
+    const result = await this.db.prepare(`SELECT value -> ? value
         FROM ${this.table} WHERE key = ?`)
-      .bind(key).first()
+      .bind(`$[${index < 0 ? '#' + index : index}]`, key).first()
     return this.decode(result?.value)
+  }
+
+  async lset<T>(key: string, index: number, value: T) {
+    this.initialized || await this.init()
+    const result = await this.db.prepare(`\
+      UPDATE ${this.table}
+        SET value = json_replace(value, ?, ?)
+        WHERE key = ?`)
+      .bind(
+        `$[${index < 0 ? '#' + index : index}]`,
+        this.encode(value),
+        key)
+      .run()
+    return result?.meta.changes > 0
   }
 
   async expire(key: string, seconds: number) {

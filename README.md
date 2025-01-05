@@ -9,31 +9,31 @@ const kv = new KV(ctx.env.db)
 
 await kv.set('k0', 0)
 await kv.get('k0') // 0
-await kv.set('k1', '1')
-await kv.get('k1') // '1'
+await kv.set('k1', {kv: true})
+await kv.get('k1') // {kv: true}
 
 await kv.keys('k*') // ['k0', 'k1']
-
-await kv.del('k0', 'k1')
 ```
 
 ## Supported Commands
 
-- set
-- get
-- keys
-- del
-- mset
-- mget
-- incr
 - decr
+- del
+- expire
+- get
+- incr
+- keys
+- lindex
+- lpop
 - lpush
 - lrange
-- lpop
-- rpush
-- rpop
 - lrem
-- expire
+- lset
+- mget
+- mset
+- rpop
+- rpush
+- set
 - ttl
 
 ## Multiple Stores

@@ -200,6 +200,16 @@ test('pop', async () => {
   expect(await kv.rpop('k')).toEqual({})
 })
 
+test('lset', async () => {
+  const kv = new KV(db, {table: 'lset'})
+  expect(await kv.lset('l', 0, 0)).toBeFalse()
+  await kv.lpush('l', 0)
+  await kv.lset('l', 0, 1)
+  expect(await kv.lindex('l', 0)).toBe(1)
+  await kv.lset('l', 1, 2)
+  expect(await kv.lindex('l', 1)).toBe(null)
+})
+
 test('ttl', async () => {
   const kv = new KV(db, {table: 'ttl'})
   await kv.set('k', 1)
