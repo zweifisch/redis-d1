@@ -119,7 +119,7 @@ export class KV {
     return parseInt(result!.value as string)
   }
 
-  async lpush<T>(key: string, value: T) {
+  async rpush<T>(key: string, value: T) {
     this.initialized || await this.init()
     const val = JSON.stringify(value)
     await this.db.prepare(`\
@@ -144,7 +144,7 @@ export class KV {
     return this.decode((result?.results?.[0] as any)?.value)
   }
 
-  async rpush<T>(key: string, value: T) {
+  async lpush<T>(key: string, value: T) {
     this.initialized || await this.init()
     const val = JSON.stringify(value)
     await this.db.prepare(`\
