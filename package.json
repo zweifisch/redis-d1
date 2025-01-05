@@ -1,5 +1,5 @@
 {
-  "name": "d1-kv",
+  "name": "redis-d1",
   "version": "1.0.0",
   "main": "lib/index.js",
   "scripts": {
@@ -24,7 +24,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/zweifisch/d1-kv.git"
+    "url": "git+https://github.com/zweifisch/redis-d1.git"
   },
   "keywords": [
     "d1",
@@ -34,7 +34,7 @@
   ],
   "types": "./lib/index.d.ts",
   "bugs": {
-    "url": "https://github.com/zweifisch/d1-kv/issues"
+    "url": "https://github.com/zweifisch/redis-d1/issues"
   },
-  "homepage": "https://github.com/zweifisch/d1-kv#readme"
+  "homepage": "https://github.com/zweifisch/redis-d1#readme"
 }

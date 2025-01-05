@@ -1,9 +1,9 @@
-# d1-kv
+# redis-d1
 
 d1 as kv store.
 
 ```js
-import { KV } from 'd1-kv'
+import { KV } from 'redis-d1'
 
 const kv = new KV(ctx.env.db)
 
