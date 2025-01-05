@@ -20,10 +20,10 @@ export class KV {
     if (!this.initialization) {
       this.initialization = this.db
         .exec(`\
-          CREATE TABLE IF NOT EXISTS ${this.table} (
-            key TEXT PRIMARY KEY,
-            value JSON,
-            expire_at INTEGER
+          CREATE TABLE IF NOT EXISTS ${this.table} (\
+            key TEXT PRIMARY KEY,\
+            value JSON,\
+            expire_at INTEGER\
           );
           CREATE INDEX IF NOT EXISTS idx_expire_at ON ${this.table} (expire_at);`)
       this.initialization.then(() => this.initialized = true)

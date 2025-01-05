@@ -15,6 +15,26 @@
   "dependencies": {
     "@cloudflare/workers-types": "^4.20241112.0"
   },
-  "files": ["lib/", "src/*.ts", "!src/*.test.ts"],
-  "description": "d1 as kv"
+  "files": [
+    "lib/"
+  ],
+  "description": "d1 as kv",
+  "directories": {
+    "lib": "lib"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zweifisch/d1-kv.git"
+  },
+  "keywords": [
+    "d1",
+    "cloudflare",
+    "kv",
+    "redis"
+  ],
+  "types": "./lib/index.d.ts",
+  "bugs": {
+    "url": "https://github.com/zweifisch/d1-kv/issues"
+  },
+  "homepage": "https://github.com/zweifisch/d1-kv#readme"
 }
