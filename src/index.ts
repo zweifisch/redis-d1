@@ -94,9 +94,9 @@ export class KV {
     pattern = pattern.replaceAll('?', '_').replaceAll('*', '%')
     return this.db.prepare(`\
       SELECT key FROM ${this.table}
-        WHERE key LIKE '${pattern}'${escape ? " ESCAPE '\\'" : ''}
+        WHERE key LIKE ?${escape ? " ESCAPE '\\'" : ''}
         AND (expire_at IS NULL OR expire_at > UNIXEPOCH())`)
-      .bind()
+      .bind(pattern)
       .run()
       .then(rows => rows.results.map(x => x.key))
   }
@@ -188,7 +188,7 @@ export class KV {
           AND (expire_at IS NULL OR expire_at > UNIXEPOCH())
         ORDER BY el.key
       )
-      WHERE key >= ?${end === -1 ? '' : ` AND key <= ${end}`}`
+      WHERE key >= ?${end === -1 ? '' : ` AND key <= ${Number(end)}`}`
       )
       .bind(key, start)
       .first()
@@ -247,8 +247,7 @@ export class KV {
 
   async lindex(key: string, index: number) {
     this.initialized || await this.init()
-    index = Number(index)
-    const result = await this.db.prepare(`SELECT value -> '$[${index < 0 ? '#' + index : index}]' value
+    const result = await this.db.prepare(`SELECT value -> '$[${index < 0 ? '#' + Number(index) : Number(index)}]' value
         FROM ${this.table} WHERE key = ?`)
       .bind(key).first()
     return this.decode(result?.value)
@@ -282,8 +281,8 @@ export class KV {
     const val = this.encode(value)
     return this.db.prepare(`\
       INSERT INTO ${this.table} (key, value) VALUES (?, json_object(?, json(?)))
-        ON CONFLICT(key) DO UPDATE SET value = json_set(value, '$.${field}', json(?))`)
-      .bind(key, field, val, val)
+        ON CONFLICT(key) DO UPDATE SET value = json_set(value, ?, json(?))`)
+      .bind(key, field, val, `$.${field}`, val)
       .run()
   }
 

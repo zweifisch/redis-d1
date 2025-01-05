@@ -101,6 +101,11 @@ test('keys', async () => {
 
   await kv.del('k00', 'k_12')
   expect(await kv.keys('*')).toEqual(['k_1'])
+
+  await kv.set(`'a'`, 'a')
+  await kv.set(`'b'`, 'b')
+  await kv.set(`"c"`, 'c')
+  expect(await kv.keys(`'?'`)).toEqual([`'a'`, `'b'`])
 })
 
 test('mset/mget', async () => {
@@ -191,7 +196,7 @@ test('pop', async () => {
   await kv.lpush('k', [])
   expect(await kv.lpop('k')).toEqual([])
 
-  await kv.lpush('k', {})
+  await kv.rpush('k', {})
   expect(await kv.rpop('k')).toEqual({})
 })
 
