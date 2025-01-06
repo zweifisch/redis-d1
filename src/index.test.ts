@@ -246,3 +246,12 @@ test('hset/hget', async () => {
   expect(await kv.hgetall('h')).toEqual({f: {ok: true}})
   expect(await kv.get('h')).toEqual({f: {ok: true}})
 })
+
+test('hdel', async () => {
+  const kv = new KV(db, {table: 'hdel'})
+  await kv.hset('h', 'f', 1)
+  expect(await kv.hget('h', 'f')).toBe(1)
+  await kv.hdel('h', 'f')
+  expect(await kv.hget('h', 'f')).toBeNull()
+  expect(await kv.hgetall('h')).toEqual({})
+})

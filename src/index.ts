@@ -311,6 +311,15 @@ export class KV {
     return this.decode(result?.value)
   }
 
+  async hdel(key: string, field: string) {
+    this.initialized || await this.init()
+    return this.db.prepare(`\
+      UPDATE ${this.table} SET value = json_remove(value, ?)
+      WHERE key = ?`)
+      .bind(`$.${field}`, key)
+      .run()
+  }
+
   async hgetall(key: string) {
     return this.get(key)
   }

@@ -21,6 +21,10 @@ await kv.keys('k*') // ['k0', 'k1']
 - del
 - expire
 - get
+- hdel
+- hget
+- hgetall
+- hset
 - incr
 - keys
 - lindex
